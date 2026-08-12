@@ -1,0 +1,207 @@
+.entity-context-menu {
+  position: fixed;
+  z-index: 50;
+  width: 176px;
+  padding: 6px;
+  border: 1px solid #344252;
+  border-radius: 7px;
+  background: #18212b;
+  box-shadow: 0 14px 36px #000b;
+  color: #dbe5ef;
+}
+
+.entity-context-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 3px 6px 7px;
+  border-bottom: 1px solid #2a3542;
+  font-size: 10px;
+}
+
+.entity-context-title > span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: #173c36;
+  color: #48d5b8;
+}
+
+.entity-context-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.entity-context-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 31px;
+  margin-top: 5px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #cbd7e3;
+  text-align: left;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.entity-context-menu > button:hover,
+.entity-context-menu > button:focus-visible {
+  background: #233342;
+  outline: 1px solid #3e566c;
+}
+
+.entity-context-menu > button.danger {
+  color: #f09b9b;
+}
+
+.entity-context-menu > button.danger:hover,
+.entity-context-menu > button.danger:focus-visible {
+  background: #43282c;
+  outline-color: #744047;
+}
+
+.entity-context-menu > button:disabled {
+  color: #687585;
+  background: transparent;
+  cursor: not-allowed;
+  outline: 0;
+}
+
+.entity-context-menu > button span {
+  font-size: 14px;
+}
+
+.entity-context-menu > small {
+  display: block;
+  padding: 1px 8px 5px;
+  color: #8a98a9;
+  font-size: 8px;
+}
+
+.tree-row.root,
+.tree-row.level1,
+.tree-row.level2 {
+  cursor: pointer;
+}
+
+.tree-row.root.current,
+.tree-row.level1.current,
+.tree-row.level2.current {
+  background: #1b3e39;
+  color: #daf9f0;
+  box-shadow: inset 2px 0 #36cfb0;
+}
+
+.hierarchy-inspector .object-icon {
+  background: #243443;
+  color: #72b9dc;
+}
+
+.hierarchy-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.hierarchy-stats span {
+  min-width: 0;
+  padding: 9px 8px;
+  border: 1px solid #2d3946;
+  border-radius: 5px;
+  background: #101720;
+  color: #7f8fa2;
+  font-size: 8px;
+  text-align: center;
+}
+
+.hierarchy-stats b {
+  display: block;
+  margin-bottom: 3px;
+  color: #d5e0eb;
+  font-size: 14px;
+}
+
+.confirmation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #02070db8;
+  backdrop-filter: blur(2px);
+}
+
+.confirmation-dialog {
+  width: min(430px, 100%);
+  padding: 20px;
+  border: 1px solid #344657;
+  border-radius: 10px;
+  background: #151e28;
+  box-shadow: 0 22px 60px #000c;
+  color: #dce6ef;
+}
+
+.confirmation-dialog h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.confirmation-dialog p {
+  margin: 0;
+  color: #94a4b4;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.confirmation-actions button {
+  min-width: 76px;
+  padding: 7px 12px;
+  border: 1px solid #3b4b5b;
+  border-radius: 5px;
+  background: #202c38;
+  color: #d5e0ea;
+  cursor: pointer;
+}
+
+.confirmation-actions button:hover {
+  border-color: #4fcab0;
+}
+
+.confirmation-actions button.danger {
+  border-color: #88454d;
+  background: #5a2f35;
+  color: #ffd3d6;
+}
+
+.sidebar.right input:disabled,
+.sidebar.right select:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+
+.locked-hint {
+  display: block;
+  margin-bottom: 8px;
+  color: #f0bc67;
+  font-size: 9px;
+}

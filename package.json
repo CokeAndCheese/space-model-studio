@@ -1,0 +1,28 @@
+{
+  "name": "space-model-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "injector": "npm --prefix \"./V0.4 GLB metadata import/server\" start",
+    "build": "vue-tsc -b && vite build",
+    "typecheck": "vue-tsc -b",
+    "test": "vitest run",
+    "verify:release": "vite-node scripts/generate-demo-release.ts"
+  },
+  "dependencies": {
+    "three": "0.170.0",
+    "vue": "3.5.13",
+    "zod": "3.24.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.170.0",
+    "@types/node": "22.10.2",
+    "@vitejs/plugin-vue": "5.2.1",
+    "typescript": "5.7.2",
+    "vite": "5.4.14",
+    "vitest": "2.1.8",
+    "vue-tsc": "2.2.0"
+  }
+}

@@ -1,0 +1,46 @@
+.tree-row.level4 {
+  padding-left: 58px;
+  cursor: pointer;
+}
+
+.tree-row.external-root {
+  margin-top: 3px;
+  color: #8798ab;
+  cursor: default;
+}
+
+.tree-row.external-root b {
+  color: #7c8ca0;
+}
+
+.tree-row.external-node {
+  color: #91a0b2;
+}
+
+.tree-row.external-node .entity-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-row.external-node b {
+  color: #607186;
+  font-size: 8px;
+}
+
+.readonly-badge {
+  padding: 3px 7px;
+  border: 1px solid #405064;
+  border-radius: 10px;
+  color: #8fa0b5;
+  font-size: 8px;
+}
+
+.readonly-note {
+  padding: 9px;
+  border: 1px solid #2d3946;
+  border-radius: 4px;
+  background: #101720;
+  color: #8291a4;
+  font-size: 9px;
+  line-height: 1.6;
+}
