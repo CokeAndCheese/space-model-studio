@@ -36,6 +36,12 @@ interface GroundPointResult {
   alignedZ: boolean
 }
 
+interface SpaceCandidatePreview {
+  id: string
+  polygon: Vec2[]
+  confidence: 'high' | 'low'
+}
+
 const props = withDefaults(defineProps<{
   floor: Floor
   mode: '2D' | '3D'
@@ -50,6 +56,9 @@ const props = withDefaults(defineProps<{
   wallThickness?: number
   /** Optional read-only imported model, kept in native coordinates. */
   externalGlb?: ArrayBuffer
+  /** Transient inferred SPACE candidates. They are never Domain entities. */
+  spaceCandidates?: SpaceCandidatePreview[]
+  selectedCandidateIds?: string[]
   /** Elevation of the interaction plane and Domain projections. */
   floorElevation?: number
 }>(), {
@@ -64,6 +73,8 @@ const emit = defineEmits<{
   'wall-rejected': [payload: { reason: 'too-short'; length: number; minimum: number }]
   pointer: [point: Vec2]
   'external-load-error': [message: string]
+  'candidate-select': [id: string, additive?: boolean]
+  'candidate-selection': [payload: ViewportSelectionPayload]
 }>()
 
 const BOX_DRAG_THRESHOLD = 5
@@ -80,6 +91,7 @@ let orthographic: THREE.OrthographicCamera
 let controls: OrbitControls
 let objects = new THREE.Group()
 let externalModel = new THREE.Group()
+let candidateSpaces = new THREE.Group()
 let grid = new THREE.GridHelper(60, 60, 0x334556, 0x1d2935)
 const gltfLoader = new GLTFLoader()
 let externalLoadRequest = 0
@@ -111,6 +123,7 @@ let selectionDrag: {
   end: ScreenPoint
   additive: boolean
   pressedEntityId?: string
+  pressedCandidateId?: string
   cameraState: {
     camera: THREE.PerspectiveCamera | THREE.OrthographicCamera
     position: THREE.Vector3
@@ -203,6 +216,68 @@ function applyDomainViewMode() {
   for (const object of objects.children) {
     const mesh = object as THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>
     if (mesh.userData.kind === 'space') applySpaceViewMode(mesh)
+  }
+}
+
+function candidateIdForObject(object: THREE.Object3D): string | undefined {
+  let current: THREE.Object3D | null = object
+  while (current && current !== candidateSpaces) {
+    if (typeof current.userData.candidateId === 'string') return current.userData.candidateId
+    current = current.parent
+  }
+  return undefined
+}
+
+function candidateMesh(candidate: SpaceCandidatePreview) {
+  const shape = new THREE.Shape()
+  shape.moveTo(candidate.polygon[0]!.x, candidate.polygon[0]!.z)
+  for (const point of candidate.polygon.slice(1)) shape.lineTo(point.x, point.z)
+  shape.closePath()
+  const geometry = new THREE.ShapeGeometry(shape)
+  geometry.rotateX(Math.PI / 2)
+  const selected = props.selectedCandidateIds?.includes(candidate.id) ?? false
+  const color = candidate.confidence === 'high' ? 0x43d7a8 : 0xf0bd61
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: selected ? 0.42 : 0.22,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  )
+  mesh.position.y = (props.floorElevation ?? 0) + 0.08
+  mesh.renderOrder = selected ? 92 : 88
+  mesh.userData.candidateId = candidate.id
+  const outline = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(
+      candidate.polygon.map((point) => new THREE.Vector3(point.x, 0, point.z)),
+    ),
+    new THREE.LineBasicMaterial({
+      color: selected ? 0xffffff : color,
+      transparent: true,
+      opacity: selected ? 1 : 0.86,
+      depthTest: false,
+      depthWrite: false,
+    }),
+  )
+  outline.userData.candidateId = candidate.id
+  outline.renderOrder = mesh.renderOrder + 1
+  mesh.add(outline)
+  return mesh
+}
+
+function rebuildCandidates() {
+  if (!scene) return
+  for (const child of [...candidateSpaces.children]) {
+    disposeObjectResources(child)
+    candidateSpaces.remove(child)
+  }
+  if (props.mode !== '2D') return
+  for (const candidate of props.spaceCandidates ?? []) {
+    if (candidate.polygon.length >= 3) candidateSpaces.add(candidateMesh(candidate))
   }
 }
 
@@ -431,6 +506,7 @@ function fitView() {
   const box = new THREE.Box3()
   box.expandByObject(objects)
   box.expandByObject(externalModel)
+  box.expandByObject(candidateSpaces)
   if (box.isEmpty()) return
   const center = box.getCenter(new THREE.Vector3())
   const size = box.getSize(new THREE.Vector3())
@@ -505,6 +581,15 @@ function pickedEntityId(event: MouseEvent | PointerEvent) {
   for (const hit of raycaster.intersectObjects(objects.children, true)) {
     const entityId = objectEntityId(hit.object)
     if (entityId) return entityId
+  }
+  return undefined
+}
+
+function pickedCandidateId(event: MouseEvent | PointerEvent) {
+  if (!updateRayPointer(event)) return undefined
+  for (const hit of raycaster.intersectObjects(candidateSpaces.children, true)) {
+    const candidateId = candidateIdForObject(hit.object)
+    if (candidateId) return candidateId
   }
   return undefined
 }
@@ -949,6 +1034,40 @@ function projectEntityBounds(): ProjectedEntityBounds[] {
   return projected
 }
 
+function projectCandidateBounds(): ProjectedEntityBounds[] {
+  if (!host.value || props.mode !== '2D') return []
+  const width = host.value.clientWidth
+  const height = host.value.clientHeight
+  if (width <= 0 || height <= 0) return []
+
+  const camera = activeCamera()
+  camera.updateMatrixWorld(true)
+  const elevation = (props.floorElevation ?? 0) + 0.08
+  return (props.spaceCandidates ?? []).flatMap((candidate) => {
+    let left = Number.POSITIVE_INFINITY
+    let top = Number.POSITIVE_INFINITY
+    let right = Number.NEGATIVE_INFINITY
+    let bottom = Number.NEGATIVE_INFINITY
+    for (const point of candidate.polygon) {
+      const projected = new THREE.Vector3(point.x, elevation, point.z).project(camera)
+      const screenX = (projected.x + 1) * 0.5 * width
+      const screenY = (1 - projected.y) * 0.5 * height
+      if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) continue
+      left = Math.min(left, screenX)
+      top = Math.min(top, screenY)
+      right = Math.max(right, screenX)
+      bottom = Math.max(bottom, screenY)
+    }
+    if (![left, top, right, bottom].every(Number.isFinite)) return []
+    return [{
+      id: candidate.id,
+      bounds: { left, top, right, bottom },
+      visible: true,
+      locked: false,
+    }]
+  })
+}
+
 function clearSelectionDrag() {
   const drag = selectionDrag
   if (drag) {
@@ -988,6 +1107,7 @@ function onSelectionPointerDown(event: PointerEvent) {
     end: start,
     additive: event.shiftKey,
     pressedEntityId: pickedEntityId(event),
+    pressedCandidateId: pickedCandidateId(event),
     cameraState: {
       camera,
       position: camera.position.clone(),
@@ -1020,26 +1140,38 @@ function onSelectionPointerUp(event: PointerEvent) {
   const end = localPointer(event) ?? drag.end
   const dragged = exceedsDragThreshold(drag.start, end, BOX_DRAG_THRESHOLD)
   let payload: ViewportSelectionPayload | undefined
+  let candidatePayload: ViewportSelectionPayload | undefined
   let clickedEntityId: string | undefined
+  let clickedCandidateId: string | undefined
   if (dragged) {
     const boxMode = boxSelectionMode(drag.start, end)
-    payload = {
-      ids: selectProjectedEntityIds(
-        projectEntityBounds(),
-        screenRectFromPoints(drag.start, end),
-        boxMode,
-      ),
+    const selectionRect = screenRectFromPoints(drag.start, end)
+    const candidateIds = selectProjectedEntityIds(projectCandidateBounds(), selectionRect, boxMode)
+    const selection: Omit<ViewportSelectionPayload, 'ids'> = {
       boxMode,
       operation: drag.additive || event.shiftKey ? 'merge' : 'replace',
       source: 'box',
     }
+    if (candidateIds.length > 0 || (selection.operation === 'merge' && (props.selectedCandidateIds?.length ?? 0) > 0)) {
+      candidatePayload = { ids: candidateIds, ...selection }
+    } else {
+      payload = {
+        ids: selectProjectedEntityIds(projectEntityBounds(), selectionRect, boxMode),
+        ...selection,
+      }
+    }
   } else {
-    clickedEntityId = pickedEntityId(event) ?? drag.pressedEntityId
-    if (!clickedEntityId) payload = blankSelectionPayload()
+    clickedCandidateId = pickedCandidateId(event) ?? drag.pressedCandidateId
+    if (!clickedCandidateId) clickedEntityId = pickedEntityId(event) ?? drag.pressedEntityId
+    if (!clickedCandidateId && !clickedEntityId) payload = blankSelectionPayload()
   }
   clearSelectionDrag()
   suppressNextClick = true
-  if (payload) {
+  if (clickedCandidateId) {
+    emit('candidate-select', clickedCandidateId, drag.additive || event.shiftKey)
+  } else if (candidatePayload) {
+    emit('candidate-selection', candidatePayload)
+  } else if (payload) {
     emit('selection', payload)
   } else if (clickedEntityId) {
     emit('select', clickedEntityId, drag.additive || event.shiftKey)
@@ -1100,8 +1232,10 @@ function onClick(event: MouseEvent) {
     return
   }
   if (props.activeTool === '选择') {
-    const entityId = pickedEntityId(event)
-    if (entityId) emit('select', entityId, event.shiftKey)
+    const candidateId = pickedCandidateId(event)
+    const entityId = candidateId ? undefined : pickedEntityId(event)
+    if (candidateId) emit('candidate-select', candidateId, event.shiftKey)
+    else if (entityId) emit('select', entityId, event.shiftKey)
     else emit('selection', blankSelectionPayload())
     return
   }
@@ -1200,7 +1334,7 @@ onMounted(() => {
   controls.target.set(0, 0, 0)
   controls.enableDamping = true
   grid.position.y = (props.floorElevation ?? 0) - 0.015
-  scene.add(grid, objects, externalModel, new THREE.HemisphereLight(0xb8d8ff, 0x27303a, 2.4))
+  scene.add(grid, objects, externalModel, candidateSpaces, new THREE.HemisphereLight(0xb8d8ff, 0x27303a, 2.4))
   initializeWallPreview()
   initializeSpacePreview()
   const sun = new THREE.DirectionalLight(0xffffff, 2.2)
@@ -1214,6 +1348,7 @@ onMounted(() => {
   })
   resizeObserver.observe(host.value)
   rebuild()
+  rebuildCandidates()
   configureCamera()
   fitView()
   loadExternalGlb(props.externalGlb)
@@ -1235,6 +1370,7 @@ onMounted(() => {
 })
 
 watch(() => props.floor, rebuild, { deep: true })
+watch(() => [props.spaceCandidates, props.selectedCandidateIds], rebuildCandidates, { deep: true })
 watch(() => props.externalGlb, loadExternalGlb)
 watch(() => props.floorElevation, () => {
   grid.position.y = (props.floorElevation ?? 0) - 0.015
@@ -1248,6 +1384,7 @@ watch(() => props.mode, () => {
   configureCamera()
   applyDomainViewMode()
   applyExternalViewMode()
+  rebuildCandidates()
   fitView()
   console.info(`${EXTERNAL_LOG_PREFIX} view:mode`, { mode: props.mode })
 })
@@ -1271,6 +1408,7 @@ onBeforeUnmount(() => {
   disposeObjectResources(spacePreview)
   disposeObjectResources(wallAlignmentGuideGroup)
   disposeObjectResources(objects)
+  disposeObjectResources(candidateSpaces)
   disposeObjectResources(grid)
   ++externalLoadRequest
   disposeExternalModel()
@@ -1278,6 +1416,7 @@ onBeforeUnmount(() => {
   scene?.remove(wallPreview)
   scene?.remove(spacePreview)
   scene?.remove(objects)
+  scene?.remove(candidateSpaces)
   scene?.remove(grid)
   controls?.dispose()
   renderer?.dispose()

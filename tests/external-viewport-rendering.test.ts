@@ -23,6 +23,24 @@ describe('external GLB viewport rendering', () => {
     expect(viewportSource).toContain('applyDomainViewMode()')
   })
 
+  it('renders transient inferred candidates separately and exposes candidate picking', () => {
+    expect(viewportSource).toContain('spaceCandidates?: SpaceCandidatePreview[]')
+    expect(viewportSource).toContain('let candidateSpaces = new THREE.Group()')
+    expect(viewportSource).toContain('function rebuildCandidates()')
+    expect(viewportSource).toContain("'candidate-select': [id: string, additive?: boolean]")
+    expect(viewportSource).toContain("'candidate-selection': [payload: ViewportSelectionPayload]")
+    expect(viewportSource).toContain('selectedCandidateIds?: string[]')
+    expect(viewportSource).toContain('props.selectedCandidateIds?.includes(candidate.id)')
+    expect(viewportSource).toContain('function projectCandidateBounds()')
+    expect(viewportSource).toContain("selection.operation === 'merge' && (props.selectedCandidateIds?.length ?? 0) > 0")
+    expect(viewportSource).toContain("emit('candidate-selection', candidatePayload)")
+    expect(viewportSource).toContain("candidate.confidence === 'high'")
+    expect(viewportSource).toContain('disposeObjectResources(candidateSpaces)')
+    expect(viewportSource).toContain('new THREE.LineLoop(')
+    expect(viewportSource).toContain('new THREE.BufferGeometry().setFromPoints(')
+    expect(viewportSource).toContain('candidate.polygon.map((point) => new THREE.Vector3(point.x, 0, point.z))')
+  })
+
   it('emits structured lifecycle and camera diagnostics', () => {
     expect(viewportSource).toContain('[SpaceModelStudio][ExternalGLB]')
     expect(viewportSource).toContain('load:start')
