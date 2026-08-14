@@ -7,6 +7,8 @@ import {
   type Floor,
   type FloorType,
   type Project,
+  SPACE_TYPES,
+  type SpaceType,
   type Vec2,
   type Vec3,
   type Wall,
@@ -118,6 +120,58 @@ function refreshAutoDirectionAndSid(project: Project, entity: Entity, floor: Flo
 
 function refreshFloorSids(project: Project, floor: Floor): void {
   for (const entity of floor.entities) refreshAutoDirectionAndSid(project, entity, floor)
+}
+
+function refreshChangedSpaceSids(project: Project, floor: Floor, selectedIds: ReadonlySet<string>): void {
+  const occupiedSids = new Set<string>()
+  const occupiedSequences = new Map<string, Set<number>>()
+
+  for (const entity of floor.entities) {
+    const selectedAutoSpace = selectedIds.has(entity.id) && entity.kind === 'space' && entity.metadata.sidMode === 'auto'
+    if (selectedAutoSpace) continue
+
+    try {
+      occupiedSids.add(generateEntitySid(entity, floor))
+    } catch {
+      // Invalid pre-existing metadata is outside this command's mutation scope.
+    }
+    if (entity.metadata.sidMode === 'auto') {
+      const group = sidGroupKey(entity)
+      const sequences = occupiedSequences.get(group) ?? new Set<number>()
+      sequences.add(entity.metadata.sequence)
+      occupiedSequences.set(group, sequences)
+    }
+  }
+
+  // Floor order is the stable tie-breaker when several selected spaces enter the same SID group.
+  for (const entity of floor.entities) {
+    if (!selectedIds.has(entity.id) || entity.kind !== 'space' || entity.metadata.sidMode !== 'auto') continue
+
+    const group = sidGroupKey(entity)
+    const sequences = occupiedSequences.get(group) ?? new Set<number>()
+    let sequence = entity.metadata.sequence
+    entity.metadata.sequence = sequence
+    let sid = generateEntitySid(entity, floor)
+
+    if (sequences.has(sequence) || occupiedSids.has(sid)) {
+      const sequenceFloor = { ...floor, entities: floor.entities.filter((candidate) => !selectedIds.has(candidate.id) || candidate.metadata.sidMode !== 'auto') }
+      sequence = allocateNextSequence(sequenceFloor, entity)
+      do {
+        entity.metadata.sequence = sequence
+        sid = generateEntitySid(entity, floor)
+        sequence += 1
+      } while (sequences.has(entity.metadata.sequence) || occupiedSids.has(sid))
+      sequence = entity.metadata.sequence
+    }
+
+    refreshAutoDirectionAndSid(project, entity, floor)
+    if (!entity.metadata.sid) {
+      throw new DomainError('AUTO_SID_UNAVAILABLE', '空间无法生成合法自动 SID', entity.id)
+    }
+    occupiedSids.add(entity.metadata.sid)
+    sequences.add(sequence)
+    occupiedSequences.set(group, sequences)
+  }
 }
 
 export type HierarchySelection =
@@ -605,6 +659,51 @@ export function updateEntity(
   })
 }
 
+/** Atomically applies a human SPACE type edit and confirms the entity. */
+export function updateSpaceTypeForEntity(project: Project, entityId: string, spaceType: SpaceType): Project {
+  if (!SPACE_TYPES.includes(spaceType)) throw new DomainError('INVALID_SPACE_TYPE', `不支持的空间类型 ${spaceType}`)
+
+  return withMutation(project, (draft) => {
+    const location = requireEntity(draft, entityId)
+    if (location.entity.kind !== 'space') throw new DomainError('NOT_A_SPACE', '实体不是空间', entityId)
+    if (location.entity.locked) throw new DomainError('ENTITY_LOCKED', '实体已锁定，不能修改', entityId)
+    location.entity.spaceType = spaceType
+    location.entity.metadata.confidence = 'confirmed'
+    refreshChangedSpaceSids(draft, location.floor, new Set([entityId]))
+  })
+}
+
+/** Atomically changes the type of confirmed, unlocked SPACE entities. */
+export function updateSpaceTypeForEntities(project: Project, entityIds: readonly string[], spaceType: SpaceType): Project {
+  const uniqueIds = [...new Set(entityIds)]
+  if (uniqueIds.length === 0) throw new DomainError('EMPTY_SPACE_SELECTION', '至少选择一个空间实体')
+  if (!SPACE_TYPES.includes(spaceType)) throw new DomainError('INVALID_SPACE_TYPE', `不支持的空间类型 ${spaceType}`)
+
+  return withMutation(project, (draft) => {
+    const selectedByFloor = new Map<Floor, Set<string>>()
+
+    // Validate the complete selection before changing any draft entity.
+    for (const entityId of uniqueIds) {
+      const location = requireEntity(draft, entityId)
+      if (location.entity.kind !== 'space') throw new DomainError('NOT_A_SPACE', '实体不是空间', entityId)
+      if (location.entity.metadata.confidence !== 'confirmed') {
+        throw new DomainError('SPACE_NOT_CONFIRMED', '空间必须是已确认实体', entityId)
+      }
+      if (location.entity.locked) throw new DomainError('ENTITY_LOCKED', '实体已锁定，不能修改', entityId)
+      const selectedIds = selectedByFloor.get(location.floor) ?? new Set<string>()
+      selectedIds.add(entityId)
+      selectedByFloor.set(location.floor, selectedIds)
+    }
+
+    for (const [floor, selectedIds] of selectedByFloor) {
+      for (const entity of floor.entities) {
+        if (selectedIds.has(entity.id) && entity.kind === 'space') entity.spaceType = spaceType
+      }
+      refreshChangedSpaceSids(draft, floor, selectedIds)
+    }
+  })
+}
+
 export interface RemoveEntityOptions {
   cascadeOpenings?: boolean
 }
@@ -649,6 +748,8 @@ export const projectCommands = {
   addEntity: (floorId: string, entity: Entity): ProjectCommand => createProjectCommand('创建实体', (project) => addEntity(project, floorId, entity)),
   updateEntity: (entityId: string, patch: EntityPatch, options: UpdateEntityOptions = {}): ProjectCommand =>
     createProjectCommand('修改实体', (project) => updateEntity(project, entityId, patch, options)),
+  updateSpaceTypeForEntities: (entityIds: readonly string[], spaceType: SpaceType): ProjectCommand =>
+    createProjectCommand('批量修改空间类型', (project) => updateSpaceTypeForEntities(project, entityIds, spaceType)),
   removeEntity: (entityId: string, options: RemoveEntityOptions = {}): ProjectCommand =>
     createProjectCommand('删除实体', (project) => removeEntity(project, entityId, options)),
 }

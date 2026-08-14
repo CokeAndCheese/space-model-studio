@@ -27,6 +27,116 @@
   font-size: 8px;
 }
 
+.tree-row.candidate-root {
+  margin-top: 3px;
+  color: #77cbb8;
+  cursor: default;
+}
+
+.tree-row.candidate-root b,
+.tree-row.candidate-node b {
+  color: #42d1ad;
+}
+
+.tree-row.candidate-node {
+  color: #b5d9d1;
+}
+
+.tree-row.candidate-node.low,
+.tree-row.candidate-node.low b {
+  color: #ddb86b;
+}
+
+.tree-row.candidate-node i {
+  color: #61cbb5;
+}
+
+.tree-row.candidate-node.low i {
+  color: #d2a952;
+}
+
+.space-detection-controls {
+  padding: 7px 10px 10px;
+  border-bottom: 1px solid #27303d;
+}
+
+.layers .space-detection-controls label {
+  position: relative;
+  gap: 6px;
+  padding: 4px;
+}
+
+.layers .space-detection-controls input,
+.layers .space-detection-controls select {
+  width: 112px;
+  height: 25px;
+  margin-left: auto;
+  border: 1px solid #2d3946;
+  border-radius: 4px;
+  background: #101720;
+  color: #b8c4d0;
+  padding: 0 19px 0 6px;
+  font-size: 9px;
+}
+
+.layers .space-detection-controls label > span {
+  position: absolute;
+  right: 9px;
+  color: #637386;
+}
+
+.detect-spaces,
+.candidate-batch button,
+.candidate-actions button {
+  border: 1px solid #334253;
+  border-radius: 4px;
+  background: #18222c;
+  color: #aebdca;
+  font-size: 9px;
+}
+
+.detect-spaces {
+  width: 100%;
+  height: 29px;
+  margin-top: 5px;
+  border-color: #179d83;
+  background: #147b69;
+  color: #effffb;
+}
+
+.detect-spaces:disabled,
+.candidate-batch button:disabled {
+  opacity: .45;
+  cursor: wait;
+}
+
+.candidate-batch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.candidate-batch button {
+  height: 26px;
+}
+
+.space-detection-controls small {
+  display: block;
+  margin-top: 7px;
+  color: #718397;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.space-detection-controls small.detection-warning {
+  padding: 6px;
+  border: 1px solid #8c6b2b;
+  border-radius: 4px;
+  background: #2a2113;
+  color: #e3be68;
+}
+
 .readonly-badge {
   padding: 3px 7px;
   border: 1px solid #405064;
@@ -43,4 +153,99 @@
   color: #8291a4;
   font-size: 9px;
   line-height: 1.6;
+}
+
+.candidate-badge {
+  padding: 3px 7px;
+  border: 1px solid #308b78;
+  border-radius: 10px;
+  color: #55d6ba;
+  font-size: 8px;
+}
+
+.candidate-badge.low {
+  border-color: #8d7137;
+  color: #e0b95e;
+}
+
+.candidate-inspector small {
+  color: #50cbb1;
+}
+
+.candidate-reasons {
+  margin: 0;
+  padding-left: 17px;
+  color: #a9b7c5;
+  font-size: 9px;
+  line-height: 1.8;
+}
+
+.candidate-reasons li::marker {
+  color: #45cdb0;
+}
+
+.candidate-note {
+  margin-top: 9px;
+  padding: 8px;
+  border: 1px solid #2b4a45;
+  border-radius: 4px;
+  background: #11231f;
+  color: #7da69d;
+  font-size: 8px;
+  line-height: 1.55;
+}
+
+.candidate-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.candidate-actions button {
+  width: 100%;
+  min-height: 29px;
+}
+
+.candidate-actions button.primary {
+  border-color: #1daa8e;
+  background: #16816d;
+  color: #f0fffb;
+}
+
+.batch-selection-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.batch-selection-summary span {
+  padding: 8px;
+  border: 1px solid #2b3b47;
+  border-radius: 4px;
+  background: #101820;
+  color: #7f91a4;
+  font-size: 8px;
+}
+
+.batch-selection-summary b {
+  display: block;
+  margin-bottom: 3px;
+  color: #52d3b7;
+  font-size: 13px;
+}
+
+.batch-edit-note {
+  margin-top: 9px;
+  padding: 8px;
+  border: 1px solid #2b4a45;
+  border-radius: 4px;
+  background: #11231f;
+  color: #7da69d;
+  font-size: 8px;
+  line-height: 1.55;
+}
+
+.batch-edit-note.warning {
+  border-color: #735b2f;
+  background: #261f13;
+  color: #d3ae61;
 }
