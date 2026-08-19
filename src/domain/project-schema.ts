@@ -14,6 +14,7 @@ import {
   type Project,
   type Vec2,
 } from './contract'
+import { topologyAuthoringStateSchema } from '../topology/authoring'
 
 const finite = z.number().finite()
 const positive = finite.positive()
@@ -225,6 +226,7 @@ export const stairSchema = z
     position: vec3Schema,
     length: positive,
     height: positive,
+    connectorId: z.string().trim().min(1).optional(),
     metadata: metadataFor('STAIR'),
   })
   .strict()
@@ -238,6 +240,7 @@ export const elevatorSchema = z
     width: positive,
     depth: positive,
     height: positive,
+    connectorId: z.string().trim().min(1).optional(),
     metadata: metadataFor('ELEVATOR'),
   })
   .strict()
@@ -393,6 +396,7 @@ export const projectSchema = z
       })
       .strict(),
     buildings: z.array(buildingSchema),
+    topology: topologyAuthoringStateSchema.optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })

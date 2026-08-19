@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "coordinateSpace": "MODEL_LOCAL",
+  "generator": {
+    "name": "ssp-glb-topology",
+    "version": "0.1.0",
+    "parameters": {
+      "strategy": "SEMANTIC_NODE_MST_KNN",
+      "nearestNeighbors": 3,
+      "elevationOffset": 0.08
+    }
+  },
+  "graphs": [
+    {
+      "id": "model-topology:A_1F",
+      "layers": [{ "id": "A_1F", "label": "A栋1层", "order": 1, "elevation": 0.08, "tags": ["generated"], "data": {} }],
+      "nodes": [
+        { "id": "semantic:SPACE_A", "layerId": "A_1F", "position": { "x": 0, "y": 0.08, "z": 0 }, "kind": "SPACE", "subtype": "CORRIDOR", "tags": ["generated"], "data": { "sourceSid": "SPACE_A", "renderType": "SPACE" } },
+        { "id": "semantic:DOOR_A", "layerId": "A_1F", "position": { "x": 2, "y": 0.08, "z": 0 }, "kind": "PORTAL", "subtype": "DOOR", "tags": ["generated"], "data": { "sourceSid": "DOOR_A", "renderType": "DOOR" } }
+      ],
+      "edges": [
+        { "id": "edge:semantic:DOOR_A--semantic:SPACE_A", "source": "semantic:DOOR_A", "target": "semantic:SPACE_A", "relation": "LINK", "direction": "BIDIRECTIONAL", "mode": "WALK", "tags": ["generated", "mst"], "data": { "generated": true } }
+      ],
+      "tags": ["generated"],
+      "data": { "strategy": "SEMANTIC_NODE_MST_KNN", "nearestNeighbors": 3 }
+    }
+  ],
+  "diagnostics": { "source": {}, "components": [], "unresolvedNodes": [], "warnings": [] }
+}
