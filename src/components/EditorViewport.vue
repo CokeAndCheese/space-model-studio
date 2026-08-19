@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { Entity, Floor, Vec2 } from '../domain/contract'
+import type { TopologyGraph } from '../topology/contract'
 import { buildEntityMesh } from '../geometry'
 import {
   blankSelectionPayload,
@@ -61,6 +62,11 @@ const props = withDefaults(defineProps<{
   selectedCandidateIds?: string[]
   /** Elevation of the interaction plane and Domain projections. */
   floorElevation?: number
+  /** Effective topology projection in the same MODEL_LOCAL coordinates as the GLB. */
+  topologyGraph?: TopologyGraph
+  topologyVisible?: boolean
+  selectedTopologyNodeId?: string
+  selectedTopologyEdgeId?: string
 }>(), {
   floorElevation: 0,
 })
@@ -75,6 +81,7 @@ const emit = defineEmits<{
   'external-load-error': [message: string]
   'candidate-select': [id: string, additive?: boolean]
   'candidate-selection': [payload: ViewportSelectionPayload]
+  'topology-select': [payload: { type: 'node' | 'edge'; id: string }]
 }>()
 
 const BOX_DRAG_THRESHOLD = 5
@@ -92,11 +99,13 @@ let controls: OrbitControls
 let objects = new THREE.Group()
 let externalModel = new THREE.Group()
 let candidateSpaces = new THREE.Group()
+let topologyOverlay = new THREE.Group()
 let grid = new THREE.GridHelper(60, 60, 0x334556, 0x1d2935)
 const gltfLoader = new GLTFLoader()
 let externalLoadRequest = 0
 const EXTERNAL_LOG_PREFIX = '[SpaceModelStudio][ExternalGLB]'
 let raycaster = new THREE.Raycaster()
+raycaster.params.Line = { threshold: 0.35 }
 let pointer = new THREE.Vector2()
 let wallStart: Vec2 | undefined
 let wallPreview = new THREE.Group()
@@ -124,6 +133,7 @@ let selectionDrag: {
   additive: boolean
   pressedEntityId?: string
   pressedCandidateId?: string
+  pressedTopology?: { type: 'node' | 'edge'; id: string }
   cameraState: {
     camera: THREE.PerspectiveCamera | THREE.OrthographicCamera
     position: THREE.Vector3
@@ -155,6 +165,14 @@ const externalPlanColors: Record<string, number> = {
   STAIR: 0xe5b85c,
   FACILITY: 0xff6b78,
   SPACE: 0x3cd5b3,
+}
+
+const topologyColors: Record<string, number> = {
+  SPACE: 0x3dd7bd,
+  DOOR: 0xf6b84a,
+  STAIR: 0xa983ff,
+  ELEVATOR: 0xa983ff,
+  FACILITY: 0xff7185,
 }
 
 const currentBoxMode = computed<BoxSelectionMode>(() => (
@@ -278,6 +296,75 @@ function rebuildCandidates() {
   if (props.mode !== '2D') return
   for (const candidate of props.spaceCandidates ?? []) {
     if (candidate.polygon.length >= 3) candidateSpaces.add(candidateMesh(candidate))
+  }
+}
+
+function topologyIdentity(object: THREE.Object3D): { type: 'node' | 'edge'; id: string } | undefined {
+  let current: THREE.Object3D | null = object
+  while (current && current !== topologyOverlay) {
+    if (typeof current.userData.topologyNodeId === 'string') return { type: 'node', id: current.userData.topologyNodeId }
+    if (typeof current.userData.topologyEdgeId === 'string') return { type: 'edge', id: current.userData.topologyEdgeId }
+    current = current.parent
+  }
+  return undefined
+}
+
+function rebuildTopologyOverlay() {
+  if (!scene) return
+  for (const child of [...topologyOverlay.children]) {
+    disposeObjectResources(child)
+    topologyOverlay.remove(child)
+  }
+  topologyOverlay.visible = props.topologyVisible !== false
+  const graph = props.topologyGraph
+  if (!graph) return
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
+  for (const edge of graph.edges) {
+    const source = nodeById.get(edge.source)
+    const target = nodeById.get(edge.target)
+    if (!source || !target) continue
+    const selected = edge.id === props.selectedTopologyEdgeId
+    const geometry = new THREE.BufferGeometry().setFromPoints(
+      [source.position, ...(edge.path?.via ?? []), target.position].map((point) => new THREE.Vector3(point.x, point.y + 0.035, point.z)),
+    )
+    const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+      color: selected ? 0xffdc78 : 0x4fc9e8,
+      transparent: true,
+      opacity: selected ? 1 : 0.82,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    }))
+    line.renderOrder = selected ? 162 : 158
+    line.userData.topologyEdgeId = edge.id
+    topologyOverlay.add(line)
+    for (const via of edge.path?.via ?? []) {
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(selected ? 0.22 : 0.14, 10, 7),
+        new THREE.MeshBasicMaterial({ color: selected ? 0xffffff : 0x72dcf4, depthTest: false, depthWrite: false, toneMapped: false }),
+      )
+      marker.position.set(via.x, via.y + 0.035, via.z)
+      marker.renderOrder = line.renderOrder + 1
+      marker.userData.topologyEdgeId = edge.id
+      topologyOverlay.add(marker)
+    }
+  }
+  for (const node of graph.nodes) {
+    const selected = node.id === props.selectedTopologyNodeId
+    const renderType = typeof node.data?.renderType === 'string' ? node.data.renderType : node.kind ?? ''
+    const marker = new THREE.Mesh(
+      new THREE.SphereGeometry(selected ? 0.4 : 0.28, 14, 10),
+      new THREE.MeshBasicMaterial({
+        color: selected ? 0xffffff : topologyColors[renderType] ?? 0x3dd7bd,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    )
+    marker.position.set(node.position.x, node.position.y + 0.07, node.position.z)
+    marker.renderOrder = selected ? 166 : 164
+    marker.userData.topologyNodeId = node.id
+    topologyOverlay.add(marker)
   }
 }
 
@@ -590,6 +677,16 @@ function pickedCandidateId(event: MouseEvent | PointerEvent) {
   for (const hit of raycaster.intersectObjects(candidateSpaces.children, true)) {
     const candidateId = candidateIdForObject(hit.object)
     if (candidateId) return candidateId
+  }
+  return undefined
+}
+
+function pickedTopology(event: MouseEvent | PointerEvent) {
+  if (!props.topologyGraph || props.topologyVisible === false || !updateRayPointer(event)) return undefined
+  topologyOverlay.updateMatrixWorld(true)
+  for (const hit of raycaster.intersectObjects(topologyOverlay.children, true)) {
+    const identity = topologyIdentity(hit.object)
+    if (identity) return identity
   }
   return undefined
 }
@@ -1108,6 +1205,7 @@ function onSelectionPointerDown(event: PointerEvent) {
     additive: event.shiftKey,
     pressedEntityId: pickedEntityId(event),
     pressedCandidateId: pickedCandidateId(event),
+    pressedTopology: pickedTopology(event),
     cameraState: {
       camera,
       position: camera.position.clone(),
@@ -1143,6 +1241,7 @@ function onSelectionPointerUp(event: PointerEvent) {
   let candidatePayload: ViewportSelectionPayload | undefined
   let clickedEntityId: string | undefined
   let clickedCandidateId: string | undefined
+  let clickedTopology: { type: 'node' | 'edge'; id: string } | undefined
   if (dragged) {
     const boxMode = boxSelectionMode(drag.start, end)
     const selectionRect = screenRectFromPoints(drag.start, end)
@@ -1161,13 +1260,16 @@ function onSelectionPointerUp(event: PointerEvent) {
       }
     }
   } else {
-    clickedCandidateId = pickedCandidateId(event) ?? drag.pressedCandidateId
-    if (!clickedCandidateId) clickedEntityId = pickedEntityId(event) ?? drag.pressedEntityId
-    if (!clickedCandidateId && !clickedEntityId) payload = blankSelectionPayload()
+    clickedTopology = pickedTopology(event) ?? drag.pressedTopology
+    if (!clickedTopology) clickedCandidateId = pickedCandidateId(event) ?? drag.pressedCandidateId
+    if (!clickedTopology && !clickedCandidateId) clickedEntityId = pickedEntityId(event) ?? drag.pressedEntityId
+    if (!clickedTopology && !clickedCandidateId && !clickedEntityId) payload = blankSelectionPayload()
   }
   clearSelectionDrag()
   suppressNextClick = true
-  if (clickedCandidateId) {
+  if (clickedTopology) {
+    emit('topology-select', clickedTopology)
+  } else if (clickedCandidateId) {
     emit('candidate-select', clickedCandidateId, drag.additive || event.shiftKey)
   } else if (candidatePayload) {
     emit('candidate-selection', candidatePayload)
@@ -1232,9 +1334,11 @@ function onClick(event: MouseEvent) {
     return
   }
   if (props.activeTool === '选择') {
-    const candidateId = pickedCandidateId(event)
-    const entityId = candidateId ? undefined : pickedEntityId(event)
-    if (candidateId) emit('candidate-select', candidateId, event.shiftKey)
+    const topology = pickedTopology(event)
+    const candidateId = topology ? undefined : pickedCandidateId(event)
+    const entityId = topology || candidateId ? undefined : pickedEntityId(event)
+    if (topology) emit('topology-select', topology)
+    else if (candidateId) emit('candidate-select', candidateId, event.shiftKey)
     else if (entityId) emit('select', entityId, event.shiftKey)
     else emit('selection', blankSelectionPayload())
     return
@@ -1334,7 +1438,8 @@ onMounted(() => {
   controls.target.set(0, 0, 0)
   controls.enableDamping = true
   grid.position.y = (props.floorElevation ?? 0) - 0.015
-  scene.add(grid, objects, externalModel, candidateSpaces, new THREE.HemisphereLight(0xb8d8ff, 0x27303a, 2.4))
+  topologyOverlay.name = 'topology-model-overlay'
+  scene.add(grid, objects, externalModel, candidateSpaces, topologyOverlay, new THREE.HemisphereLight(0xb8d8ff, 0x27303a, 2.4))
   initializeWallPreview()
   initializeSpacePreview()
   const sun = new THREE.DirectionalLight(0xffffff, 2.2)
@@ -1349,6 +1454,7 @@ onMounted(() => {
   resizeObserver.observe(host.value)
   rebuild()
   rebuildCandidates()
+  rebuildTopologyOverlay()
   configureCamera()
   fitView()
   loadExternalGlb(props.externalGlb)
@@ -1371,6 +1477,7 @@ onMounted(() => {
 
 watch(() => props.floor, rebuild, { deep: true })
 watch(() => [props.spaceCandidates, props.selectedCandidateIds], rebuildCandidates, { deep: true })
+watch(() => [props.topologyGraph, props.topologyVisible, props.selectedTopologyNodeId, props.selectedTopologyEdgeId], rebuildTopologyOverlay, { deep: true })
 watch(() => props.externalGlb, loadExternalGlb)
 watch(() => props.floorElevation, () => {
   grid.position.y = (props.floorElevation ?? 0) - 0.015
@@ -1409,6 +1516,7 @@ onBeforeUnmount(() => {
   disposeObjectResources(wallAlignmentGuideGroup)
   disposeObjectResources(objects)
   disposeObjectResources(candidateSpaces)
+  disposeObjectResources(topologyOverlay)
   disposeObjectResources(grid)
   ++externalLoadRequest
   disposeExternalModel()
@@ -1417,6 +1525,7 @@ onBeforeUnmount(() => {
   scene?.remove(spacePreview)
   scene?.remove(objects)
   scene?.remove(candidateSpaces)
+  scene?.remove(topologyOverlay)
   scene?.remove(grid)
   controls?.dispose()
   renderer?.dispose()
@@ -1438,6 +1547,7 @@ onBeforeUnmount(() => {
       <span>{{ currentBoxMode === 'window' ? '窗口选择' : '交叉选择' }}</span>
     </div>
     <div class="north">N<span /></div>
+    <div v-if="topologyGraph && topologyVisible !== false" class="topology-overlay-status">拓扑叠加 · {{topologyGraph.nodes.length}} 节点 · {{topologyGraph.edges.length}} 边</div>
     <div v-if="activeTool !== '选择'" class="tool-hint">
       {{ hint || (activeTool === '空间' ? '空间工具 · 逐点绘制边界 · Enter 确定 · Esc 取消' : `${activeTool}工具 · 在网格中点击放置`) }}
     </div>
@@ -1464,6 +1574,21 @@ onBeforeUnmount(() => {
 
 .viewport-host.is-select-tool :deep(canvas) { cursor: crosshair; }
 .viewport-host.is-space-tool :deep(canvas) { cursor: crosshair; }
+
+.topology-overlay-status {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 9px;
+  border: 1px solid #2f7181;
+  border-radius: 4px;
+  background: #102630e8;
+  color: #7fe5f5;
+  font-size: 9px;
+  pointer-events: none;
+}
 
 .selection-box {
   position: absolute;

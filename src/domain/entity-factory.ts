@@ -234,6 +234,7 @@ export interface StairInput extends CommonInput {
   width?: number
   totalRise?: number
   stepCount?: number
+  connectorId?: string
 }
 
 export function makeStair(floorId: string, input: StairInput): Stair {
@@ -256,6 +257,7 @@ export function makeStair(floorId: string, input: StairInput): Stair {
     position: { ...position },
     length,
     height: totalRise,
+    connectorId: input.connectorId,
     metadata: createEntityMetadata('STAIR', input.metadata),
   }
 }
@@ -265,6 +267,7 @@ export interface ElevatorInput extends CommonInput {
   width?: number
   depth?: number
   height?: number
+  connectorId?: string
 }
 
 export function makeElevator(floorId: string, input: ElevatorInput): Elevator {
@@ -282,6 +285,7 @@ export function makeElevator(floorId: string, input: ElevatorInput): Elevator {
     width: input.width ?? 2.2,
     depth: input.depth ?? 2,
     height: input.height ?? 3.6,
+    connectorId: input.connectorId,
     metadata: createEntityMetadata('ELEVATOR', input.metadata),
   }
 }

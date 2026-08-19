@@ -5,6 +5,8 @@ import { computeEntityDirection } from '../metadata/semantic-generator'
 import { collectSidDuplicates } from '../metadata/sid-generator'
 import { createValidationReport, type ValidationIssue, type ValidationReport } from './validation-report'
 import type { ValidationProfile } from './validation-profiles'
+import { resolveTopology } from '../topology/authoring'
+import { createTopologyReport } from '../topology/report'
 
 const pathToString = (path: (string | number)[]): string =>
   path.reduce<string>((result, part) => (typeof part === 'number' ? `${result}[${part}]` : result ? `${result}.${part}` : part), '')
@@ -71,6 +73,16 @@ export function validateProject(project: unknown, profile: ValidationProfile = '
     for (const entityId of ids) {
       if (issues.some((item) => item.code === 'SID_DUPLICATE' && item.entityId === entityId)) continue
       issues.push({ code: 'SID_DUPLICATE', severity: 'error', message: `SID 全局重复: ${sid}`, path: 'metadata.sid', entityId })
+    }
+  }
+
+  if (validProject.topology) {
+    const topologyReport = createTopologyReport(resolveTopology(validProject.topology))
+    topologyReport.errors.forEach((message, index) => issues.push({ code: 'TOPOLOGY_CONTRACT', severity: 'error', message, path: `topology[${index}]` }))
+    for (const graph of topologyReport.graphs) {
+      if (graph.components !== 1) issues.push({ code: 'TOPOLOGY_DISCONNECTED', severity: 'error', message: `${graph.graphId} 包含 ${graph.components} 个连通分量`, path: 'topology' })
+      if (graph.nodes > 1) graph.isolatedNodes.forEach((nodeId) => issues.push({ code: 'TOPOLOGY_ISOLATED_NODE', severity: 'error', message: `${graph.graphId} 的 ${nodeId} 没有边`, path: 'topology' }))
+      graph.invalidEdgeIds.forEach((edgeId) => issues.push({ code: 'TOPOLOGY_EDGE_GEOMETRY', severity: 'error', message: `${graph.graphId} 的 ${edgeId} 路径几何无效`, path: 'topology' }))
     }
   }
 

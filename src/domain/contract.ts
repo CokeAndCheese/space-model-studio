@@ -1,3 +1,5 @@
+import type { TopologyAuthoringState } from '../topology/authoring'
+
 /**
  * Space Model Studio's persisted domain contract.
  *
@@ -202,6 +204,8 @@ export interface Stair extends BaseEntity {
   position: Vec3
   length: number
   height: number
+  /** Stable building connector identity used only when linking authored floor graphs. */
+  connectorId?: string
 }
 
 export interface Elevator extends BaseEntity {
@@ -212,6 +216,8 @@ export interface Elevator extends BaseEntity {
   width: number
   depth: number
   height: number
+  /** Stable building connector identity used only when linking authored floor graphs. */
+  connectorId?: string
 }
 
 export type OpeningEntity = Door | WindowEntity
@@ -261,6 +267,8 @@ export interface Project {
   name: string
   settings: ProjectSettings
   buildings: Building[]
+  /** Immutable generated baseline plus sparse, reversible human authoring edits. */
+  topology?: TopologyAuthoringState
   createdAt: string
   updatedAt: string
 }

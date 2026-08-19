@@ -11,6 +11,7 @@ export interface ExternalGlbNodeSummary {
   renderTypeConfidence: 'high' | 'low'
   spaceType?: string
   fireType?: string
+  connectorId?: string
 }
 
 export function listExternalGlbNodes(json: GlbJson): ExternalGlbNodeSummary[] {
@@ -35,6 +36,7 @@ export function listExternalGlbNodes(json: GlbJson): ExternalGlbNodeSummary[] {
       renderTypeConfidence: extras.renderTypeConfidence,
       spaceType: typeof extras.spaceType === 'string' ? extras.spaceType : undefined,
       fireType: typeof extras.fireType === 'string' ? extras.fireType : undefined,
+      connectorId: typeof extras.connectorId === 'string' && extras.connectorId ? extras.connectorId : undefined,
     })
   }
   return output

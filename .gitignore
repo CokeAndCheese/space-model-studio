@@ -3,4 +3,5 @@ node_modules/
 dist/
 *.tsbuildinfo
 outputs/
-V0.4 GLB metadata import/
+# The standalone port-8002 tool may be a local directory or a worktree symlink.
+V0.4 GLB metadata import

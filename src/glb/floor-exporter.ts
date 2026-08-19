@@ -12,6 +12,7 @@ import { validateProject } from '../validation/project-validator'
 import { buildEntityGeometry, type EntityMeshGeometry } from './entity-geometry'
 import { encodeGlb } from './glb-codec'
 import { sha256 } from './bin-integrity'
+import { embedTopologyInJson, readEmbeddedTopology } from '../topology/glb'
 import { float32Bytes, indexBytes, positionBounds } from './mesh-packing'
 import type {
   FloorGlbExportResult,
@@ -125,6 +126,7 @@ function nodeMetadata(
     renderTypeConfidence,
     ...(entity.kind === 'space' ? { spaceType: entity.spaceType } : {}),
     ...(entity.kind === 'facility' ? { fireType: entity.fireType } : {}),
+    ...((entity.kind === 'stair' || entity.kind === 'elevator') && entity.connectorId ? { connectorId: entity.connectorId } : {}),
   }
 }
 
@@ -270,7 +272,9 @@ export function exportFloorToGlb(project: Project, floorId: string): FloorGlbExp
   const { building, floor } = locateFloor(project, floorId)
   const entities = sortedEntities(floor)
   if (entities.length === 0) throw new GlbExportError(`Floor ${floor.floorName} has no semantic entities to export`)
-  const { json, binary } = buildFloorJson(floor, building, entities)
+  const built = buildFloorJson(floor, building, entities)
+  const json = project.topology ? embedTopologyInJson(built.json, project.topology, floor.floorName) : built.json
+  const binary = built.binary
   const bytes = encodeGlb(json, binary)
   const fileName = `${floor.floorName}.glb`
 
@@ -287,6 +291,9 @@ export function exportFloorToGlb(project: Project, floorId: string): FloorGlbExp
       `Exported ${fileName} failed reload validation${first ? `: ${first.message}` : ''}`,
       auditReport,
     )
+  }
+  if (project.topology && !readEmbeddedTopology(bytes)) {
+    throw new GlbExportError(`Exported ${fileName} lost scene.extras.sspTopology during reload validation`)
   }
 
   return { fileName, bytes, auditReport }

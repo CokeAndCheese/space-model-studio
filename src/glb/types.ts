@@ -21,6 +21,7 @@ export interface GlbNodeExtras extends GlbSceneExtras {
   renderTypeConfidence: 'high' | 'low'
   spaceType?: string
   fireType?: string
+  connectorId?: string
 }
 
 export interface GlbJson {
